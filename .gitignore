@@ -12,3 +12,6 @@ node_modules
 
 # Cucumber
 /reports/
+
+# Playwright MCP snapshots and screenshots
+/.playwright-mcp/
