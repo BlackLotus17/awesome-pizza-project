@@ -1,0 +1,28 @@
+meta {
+  name: Create Order - Zero Quantity
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/orders
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "sender": "Bruno Tester",
+    "contents": [
+      {
+        "name": "Margherita Pizza",
+        "quantity": 0
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.success: eq false
+}

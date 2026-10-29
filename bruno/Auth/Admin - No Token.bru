@@ -1,0 +1,16 @@
+meta {
+  name: Admin - No Token
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/admin
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+  res.body.success: eq false
+}

@@ -1,0 +1,24 @@
+meta {
+  name: Admin - Non-admin Token
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/admin
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyJyb2xlIjoidXNlciJ9
+}
+
+assert {
+  res.status: eq 403
+  res.body.success: eq false
+}
+
+docs {
+  Token is base64 of `{"role":"user"}`.
+}

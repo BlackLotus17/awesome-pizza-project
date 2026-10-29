@@ -1,0 +1,27 @@
+meta {
+  name: Update Order - Contents
+  type: http
+  seq: 11
+}
+
+put {
+  url: {{baseUrl}}/api/orders/{{orderId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "contents": [
+      {
+        "name": "Quattro Stagioni",
+        "quantity": 3
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+}

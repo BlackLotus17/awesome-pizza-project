@@ -377,6 +377,7 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`🍕 Awesome Pizza API server running on port ${PORT}`);
     console.log(`🌐 Web UI available at http://localhost:${PORT}`);
+    console.log(`📖 API docs available at http://localhost:${PORT}/api-docs.html`);
 });
 
 export default app;

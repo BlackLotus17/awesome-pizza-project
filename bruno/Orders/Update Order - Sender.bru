@@ -1,0 +1,28 @@
+meta {
+  name: Update Order - Sender
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/orders/{{orderId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "sender": "Bruno Renamed"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+}
+
+tests {
+  test("updates the sender", function () {
+    expect(res.getBody().data.sender).to.equal("Bruno Renamed");
+  });
+}

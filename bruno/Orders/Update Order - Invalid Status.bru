@@ -1,0 +1,22 @@
+meta {
+  name: Update Order - Invalid Status
+  type: http
+  seq: 12
+}
+
+put {
+  url: {{baseUrl}}/api/orders/{{orderId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "COOKING"
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.success: eq false
+}

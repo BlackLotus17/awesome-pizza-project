@@ -1,0 +1,10 @@
+docs {
+  # Awesome Pizza API
+
+  Start the app with `npm start`, select the **Local** environment, then run the collection
+  (or `npx @usebruno/cli run --env Local` from this folder).
+
+  Requests run in order: **Orders / Create Order** stores `orderId` and **Auth / Login** stores `token`,
+  which later requests reuse. Order updates only touch the order this collection creates, so seed
+  orders (`order-001`…`order-003`) stay unchanged for the test suite.
+}

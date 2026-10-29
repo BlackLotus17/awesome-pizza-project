@@ -1,0 +1,31 @@
+meta {
+  name: Create Order - Missing Sender
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/orders
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "contents": [
+      {
+        "name": "Margherita Pizza",
+        "quantity": 2
+      },
+      {
+        "name": "Pepperoni Pizza",
+        "quantity": 1
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.success: eq false
+}

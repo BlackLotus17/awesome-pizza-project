@@ -1,0 +1,23 @@
+meta {
+  name: Create Order - Empty Contents
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/orders
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "sender": "Bruno Tester",
+    "contents": []
+  }
+}
+
+assert {
+  res.status: eq 400
+  res.body.success: eq false
+}

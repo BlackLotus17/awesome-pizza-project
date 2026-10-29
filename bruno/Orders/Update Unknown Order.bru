@@ -1,0 +1,22 @@
+meta {
+  name: Update Unknown Order
+  type: http
+  seq: 16
+}
+
+put {
+  url: {{baseUrl}}/api/orders/{{unknownOrderId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "DELIVERING"
+  }
+}
+
+assert {
+  res.status: eq 404
+  res.body.success: eq false
+}

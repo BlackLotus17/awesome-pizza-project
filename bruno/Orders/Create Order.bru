@@ -1,0 +1,45 @@
+meta {
+  name: Create Order
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/orders
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "sender": "Bruno Tester",
+    "contents": [
+      {
+        "name": "Margherita Pizza",
+        "quantity": 2
+      },
+      {
+        "name": "Pepperoni Pizza",
+        "quantity": 1
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.success: eq true
+}
+
+script:post-response {
+  bru.setVar("orderId", res.getBody().data.id);
+}
+
+tests {
+  test("creates the order as RECEIVED", function () {
+    const order = res.getBody().data;
+    expect(order.id).to.be.a("string");
+    expect(order.sender).to.equal("Bruno Tester");
+    expect(order.status).to.equal("RECEIVED");
+  });
+}

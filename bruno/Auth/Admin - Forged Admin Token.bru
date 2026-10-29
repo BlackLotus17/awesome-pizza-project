@@ -1,0 +1,24 @@
+meta {
+  name: Admin - Forged Admin Token
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/admin
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: eyAicm9sZSI6ICJhZG1pbiIgfQ==
+}
+
+assert {
+  res.status: eq 403
+  res.body.success: eq false
+}
+
+docs {
+  Base64 of `{ "role": "admin" }` (with spaces): an admin role, but not the server-issued token, so it is refused.
+}

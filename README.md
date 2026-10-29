@@ -40,6 +40,10 @@ The server will start on `http://localhost:3000`
 
 ## API Endpoints
 
+Interactive Swagger UI documentation is served at `http://localhost:3000/api-docs.html` while the server is running, and the raw OpenAPI 3.0 spec at `/swagger.json`. Both are static files in `ui/` (Swagger UI loads from a CDN, so it needs an internet connection). To call `/api/protected` or `/api/admin` from Swagger UI, log in with `POST /api/login` (`user` / `pass`), click **Authorize** and paste the token.
+
+A [Bruno](https://www.usebruno.com/) collection in `bruno/` covers every endpoint, including error cases. Open the folder in Bruno, pick the **Local** environment and run the collection, or run it from the command line with `cd bruno && npx @usebruno/cli run --env Local`. Requests reuse the order and token created by earlier ones, so run the whole collection or a whole folder in order rather than single requests.
+
 ### Daily Menu
 
 #### GET /api/daily-menu

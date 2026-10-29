@@ -1,0 +1,26 @@
+meta {
+  name: Update Order - Disallowed Transition
+  type: http
+  seq: 15
+}
+
+put {
+  url: {{baseUrl}}/api/orders/{{orderId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "RECEIVED"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.success: eq false
+}
+
+docs {
+  DELIVERED is final, so moving back to RECEIVED is rejected with 409.
+}

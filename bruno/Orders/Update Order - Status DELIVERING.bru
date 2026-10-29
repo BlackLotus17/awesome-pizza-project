@@ -1,0 +1,22 @@
+meta {
+  name: Update Order - Status DELIVERING
+  type: http
+  seq: 13
+}
+
+put {
+  url: {{baseUrl}}/api/orders/{{orderId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "status": "DELIVERING"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.success: eq true
+}

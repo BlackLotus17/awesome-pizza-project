@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A small Express + vanilla-JS pizza ordering app (the system under test) plus a **Cucumber + Playwright** BDD test suite for it. Most work here is on the tests, not the app.
 
-- `api/server.ts` — Express server on port 3000. Serves `ui/` statically and the REST API (`/api/daily-menu`, `/api/orders`, `/api/orders/:id`, `/api/login`, `/api/protected`, `/api/admin`).
+- `api/server.ts` — Express server on port 3000. Serves `ui/` statically and the REST API (`/api/daily-menu`, `/api/orders`, `/api/orders/:id`, `/api/login`, `/api/protected`, `/api/admin`). API docs are static: Swagger UI at `/api-docs.html` (`ui/api-docs.html`, loaded from a CDN) reading the OpenAPI spec `ui/swagger.json` — update the spec when routes change.
 - `api/database.ts` — in-memory menu and seed orders (`order-001`…`order-003`). State resets only on server restart.
 - `model/Model.ts` — shared types. Orders use **`sender`** for the customer name (the README's examples say `name`; the README is out of date, and its `npm run dev` / `npm run build` scripts don't exist).
-- `ui/` — static pages (`index.html` menu/cart/order management, `login.html`, `protected.html`), no build step.
+- `ui/` — static pages (`index.html` menu/cart/order management, `login.html`, `protected.html`, `api-docs.html`), no build step.
+- `bruno/` — Bruno API collection (Menu, Orders, Auth folders; `Local` environment); `requests.http` is the older VS Code REST Client equivalent.
 - `specs/test-plan.md` — the test plan: features, test case IDs (`TC-…`), and known defects D-1…D-7. Feature scenarios are named after these IDs.
 
 ## Commands
