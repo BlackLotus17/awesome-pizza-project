@@ -7,6 +7,27 @@ import { dailyMenu, findOrderById, addOrder, updateOrderById } from './database'
 // To generate: Buffer.from(JSON.stringify({ role: 'admin' })).toString('base64')
 const HARDCODED_TOKEN = 'eyJyb2xlIjoiYWRtaW4ifQ==';
 
+// Status lifecycle, matching the actions the UI offers. Re-sending the current status is a no-op.
+const ALLOWED_TRANSITIONS: Record<order['status'], order['status'][]> = {
+    RECEIVED: ['DELIVERING', 'CANCELED'],
+    DELIVERING: ['DELIVERED'],
+    DELIVERED: [],
+    CANCELED: [],
+};
+
+/** Returns an error message for the first item that isn't on the menu or has a non-whole quantity. */
+function validateMenuItems(contents: { name: string, quantity: number }[]): string | null {
+    for (const item of contents) {
+        if (!dailyMenu.some(entry => entry.name === item.name)) {
+            return `'${item.name}' is not on the menu`;
+        }
+        if (!Number.isInteger(item.quantity)) {
+            return 'Each order item quantity must be a whole number';
+        }
+    }
+    return null;
+}
+
 function extractBearerToken(req: Request): string | null {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -142,6 +163,15 @@ app.post('/api/orders', (req, res) => {
             }
         }
 
+        const menuError = validateMenuItems(contents);
+        if (menuError) {
+            return res.status(400).json({
+                success: false,
+                error: 'Bad request',
+                message: menuError
+            });
+        }
+
         // Create new order with default status
         const orderData = {
             sender: sender.trim(),
@@ -212,6 +242,13 @@ app.put('/api/orders/:id', (req, res) => {
                     message: `Status must be one of: ${validStatuses.join(', ')}`
                 });
             }
+            if (status !== existingOrder.status && !ALLOWED_TRANSITIONS[existingOrder.status].includes(status)) {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Conflict',
+                    message: `Cannot change status from ${existingOrder.status} to ${status}`
+                });
+            }
             updateData.status = status;
         }
 
@@ -241,6 +278,15 @@ app.put('/api/orders/:id', (req, res) => {
                         message: 'Each order item must have a valid quantity (positive number)'
                     });
                 }
+            }
+
+            const menuError = validateMenuItems(contents);
+            if (menuError) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Bad request',
+                    message: menuError
+                });
             }
             updateData.contents = contents;
         }
@@ -314,7 +360,8 @@ app.get('/api/admin', (req, res) => {
         return;
     }
 
-    if (payload.role === 'admin') {
+    // The payload is unsigned, so only the server-issued token is trusted (anyone can base64 their own role)
+    if (payload.role === 'admin' && token === HARDCODED_TOKEN) {
         res.status(200).json({ success: true, message: 'Welcome, admin!' });
     } else {
         res.status(403).json({ success: false, error: 'Forbidden', message: 'Not authorised' });

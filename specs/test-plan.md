@@ -34,13 +34,16 @@ These were reproduced on 2026-10-29. Tests for them should be written to assert 
 
 | ID | Severity | Defect | How it was reproduced |
 |---|---|---|---|
-| D-1 | High (security) | `/api/admin` trusts any self-made token: base64 of `{"role":"admin"}` (or with extra fields) is accepted without a signature | `curl /api/admin -H "Authorization: Bearer $(printf '{"role":"admin","forged":1}' \| base64)"` → `Welcome, admin!` |
-| D-2 | Medium | Server allows any status transition, e.g. DELIVERED → RECEIVED. The UI enforces the lifecycle, the API does not | `PUT /api/orders/order-003 {"status":"RECEIVED"}` → 200 |
-| D-3 | Medium | Server accepts items that are not on the menu and fractional quantities | `POST /api/orders` with `{"name":"Not On Menu","quantity":1.5}` → 201 |
-| D-4 | Medium | Protected page logged out shows both "Welcome! You are logged in. Here is the secret staff data." **and** the "only visible to logged-in users" message | Open `/protected.html` with no token |
-| D-5 | Low | Theme toggle does nothing on `/protected.html` when logged out (its click listener is only attached after the token check) | Open `/protected.html` logged out, click 🌙 |
-| D-6 | High (security), **to confirm** | User-supplied text is rendered with `innerHTML` (customer name in order details, order ID in lookups), so stored XSS is likely | Covered by TC-SEC-1; not yet reproduced |
-| D-7 | Low, **to confirm** | Order IDs are put into the URL without `encodeURIComponent`, so IDs containing `/`, `?` or `#` may hit the wrong route | Covered by TC-ORD-LU-6 |
+| D-1 | High (security), **fixed** | `/api/admin` trusts any self-made token: base64 of `{"role":"admin"}` (or with extra fields) is accepted without a signature | `curl /api/admin -H "Authorization: Bearer $(printf '{"role":"admin","forged":1}' \| base64)"` → `Welcome, admin!` |
+| D-2 | Medium, **fixed** | Server allows any status transition, e.g. DELIVERED → RECEIVED. The UI enforces the lifecycle, the API does not | `PUT /api/orders/order-003 {"status":"RECEIVED"}` → 200 |
+| D-3 | Medium, **fixed** | Server accepts items that are not on the menu and fractional quantities | `POST /api/orders` with `{"name":"Not On Menu","quantity":1.5}` → 201 |
+| D-4 | Medium, **fixed** | Protected page logged out shows both "Welcome! You are logged in. Here is the secret staff data." **and** the "only visible to logged-in users" message | Open `/protected.html` with no token |
+| D-5 | Low, **fixed** | Theme toggle does nothing on `/protected.html` when logged out (its click listener is only attached after the token check) | Open `/protected.html` logged out, click 🌙 |
+| D-6 | High (security), **confirmed and fixed** | User-supplied text was rendered with `innerHTML` in the order details (customer name, order ID, item names), so stored XSS ran. Now escaped, and the status buttons use listeners instead of inline `onclick` | Covered by TC-SEC-1 |
+| D-7 | Low, **confirmed and fixed** | Order IDs are put into the URL without `encodeURIComponent`, so IDs containing `/`, `?` or `#` may hit the wrong route | Covered by TC-ORD-LU-6 |
+| D-8 | Low, **fixed** | A 200 character customer name with no spaces overflows the order details and gives the page a horizontal scroll | Covered by TC-ORD-8 |
+| D-9 | Medium, **fixed** | Light-theme accent `#ff6b35` fails colour contrast: section headings on white are 2.83:1 (needs 3:1) and the white Login button text is 2.83:1 (needs 4.5:1). Accent darkened to `#c2410c` (5.2:1) | Covered by TC-A11Y-3 |
+| D-10 | Medium, **fixed** | **Place Order** has no in-flight guard, so a double-click sends two `POST /api/orders` requests and creates two orders | Covered by TC-ORD-7 |
 
 ---
 
@@ -55,7 +58,7 @@ These were reproduced on 2026-10-29. Tests for them should be written to assert 
 1. `playwright.config.ts`: set `use.baseURL: 'http://localhost:3000'` and enable `webServer` (`npm run start`, `reuseExistingServer: !process.env.CI`) so tests start the app themselves.
 2. Add a `setup` project with an authentication spec that logs in as `user` / `pass` and saves `playwright/.auth/user.json`. Logged-in tests depend on it through `storageState`.
 3. Split projects: `api` (no browser, runs once), `chromium` / `firefox` / `webkit` for UI, plus `mobile-chrome` (Pixel 7) for the responsive checks only.
-4. Create a shared `tests/fixtures.ts` that opens `/` relative to `baseURL` and provides the helper fixtures listed in §5.
+4. Create shared fixtures in `tests/fixtures/index.ts` that open `/` relative to `baseURL` and provide the helpers listed in §5.
 
 **Test data and isolation**
 The server keeps all state in memory and tests run in parallel, so:
@@ -108,8 +111,8 @@ The server keeps all state in memory and tests run in parallel, so:
 | TC-ORD-4 | P2 | New order can be looked up | Reload, look up the returned ID → same data |
 | TC-ORD-5 | P2 | Server rejects the order (mocked 400 `success:false`) | Toast "Failed to place order: <message>". Cart and name **kept** |
 | TC-ORD-6 | P2 | Network failure (mocked abort) | Toast "Error placing order". Cart kept |
-| TC-ORD-7 | P3 | Double-click **Place Order** | Documents whether two orders are created (there's no in-flight guard, so likely yes; raise a defect if confirmed) |
-| TC-ORD-8 | P3 | Unicode / long name (emoji, accents, 200 characters) | Order created, name shown exactly, layout holds |
+| TC-ORD-7 | P3 | Double-click **Place Order** (D-10) | Exactly one `POST /api/orders` is sent; the button is disabled while the request is in flight |
+| TC-ORD-8 | P3 | Unicode / long name (emoji, accents, 200 characters) | Order created, name shown exactly, layout holds (no horizontal scroll, D-8) |
 
 ### 4.4 Order lookup and status lifecycle (UI)
 
@@ -143,7 +146,7 @@ The server keeps all state in memory and tests run in parallel, so:
 | TC-THEME-2 | P2 | Persists across reload | Dark stays dark after reload |
 | TC-THEME-3 | P3 | Shared across pages | Dark on `/` → `/login.html` and `/protected.html` load dark |
 | TC-THEME-4 | P3 | Toggle on login page and on protected page when logged in | Works as in TC-THEME-1 |
-| TC-THEME-5 | P3 | Toggle on protected page **logged out** (D-5) | Should toggle. `test.fail()` until fixed |
+| TC-THEME-5 | P3 | Toggle on protected page **logged out** (D-5) | Theme toggles |
 | TC-THEME-6 | P3 | Dark-mode visual snapshot | `toHaveScreenshot` of `/` in light and dark (Chromium only, menu images masked) |
 
 ### 4.7 Login and protected area (UI)
@@ -159,7 +162,7 @@ The server keeps all state in memory and tests run in parallel, so:
 | TC-AUTH-7 | P2 | Login API unreachable (mocked abort) | "Login failed — server unreachable" |
 | TC-AUTH-8 | P2 | Already logged in, open `/login.html` | Redirected immediately to `/protected.html` (uses storageState) |
 | TC-AUTH-9 | P1 | Logout | Token removed, redirected to `/login.html`. Going back to `/protected.html` shows the logged-out view |
-| TC-AUTH-10 | P1 | Open `/protected.html` logged out | Login-required message with a link to `login.html`. No secret data, no Logout. Assert that **no** "Welcome! You are logged in" text appears (D-4, `test.fail()` until fixed) |
+| TC-AUTH-10 | P1 | Open `/protected.html` logged out | Login-required message with a link to `login.html`. No secret data, no Logout. Assert that **no** "Welcome! You are logged in" text appears (D-4) |
 | TC-AUTH-11 | P1 | Invalid or expired token in storage | `GET /api/protected` returns 401 → token cleared, redirected to login |
 | TC-AUTH-12 | P2 | Protected API returns 500 or fails (mocked) | "Failed to load protected data." |
 
@@ -174,12 +177,12 @@ The server keeps all state in memory and tests run in parallel, so:
 | TC-API-5 | P1 | `POST` validation (data-driven) | 400 with the documented message for each of: missing / empty / whitespace / non-string `sender`; missing / non-array / empty `contents`; item with missing / empty / non-string `name`; `quantity` missing / 0 / negative / string |
 | TC-API-6 | P2 | `POST` with a non-JSON body | Handled with a 4xx, not a crash. Server still responds afterwards |
 | TC-API-7 | P2 | Generated IDs are unique | 20 parallel `POST`s → 20 different IDs |
-| TC-API-8 | P1 | `PUT` each valid status | 200, `status` updated, other fields unchanged |
+| TC-API-8 | P1 | `PUT` each allowed transition (RECEIVED→RECEIVED, RECEIVED→DELIVERING, DELIVERING→DELIVERED, RECEIVED→CANCELED) | 200, `status` updated, other fields unchanged |
 | TC-API-9 | P1 | `PUT` validation | Bad status (`"SHIPPED"`, lowercase `"delivered"`) → 400 listing valid statuses. Empty `sender`, empty or invalid `contents` → 400. Unknown ID → 404 |
 | TC-API-10 | P2 | `PUT` partial update | Only `sender` → sender changes, status and contents kept. Empty body `{}` → 200, nothing changes |
 | TC-API-11 | P2 | `PUT` updates `contents` | New items replace the old ones |
-| TC-API-12 | P2 | Lifecycle enforced server-side (D-2) | DELIVERED → RECEIVED and CANCELED → DELIVERING should be rejected. `test.fail()` until fixed |
-| TC-API-13 | P2 | Menu-only items and whole-number quantities (D-3) | Unknown pizza name or `quantity:1.5` should give 400. `test.fail()` until fixed |
+| TC-API-12 | P2 | Lifecycle enforced server-side (D-2) | DELIVERED → RECEIVED and CANCELED → DELIVERING are rejected (409) |
+| TC-API-13 | P2 | Menu-only items and whole-number quantities (D-3) | Unknown pizza name or `quantity:1.5` gives 400 |
 | TC-API-14 | P3 | CORS | Response headers include `Access-Control-Allow-Origin: *`. `OPTIONS /api/orders` → 200 |
 
 ### 4.9 API: auth
@@ -190,7 +193,7 @@ The server keeps all state in memory and tests run in parallel, so:
 | TC-API-AUTH-2 | P1 | `POST /api/login` invalid / missing fields | 401, `error:"Invalid credentials"` |
 | TC-API-AUTH-3 | P1 | `GET /api/protected` | No header / no `Bearer ` prefix / wrong token → 401 `Valid token required`. Valid token → 200 with `secretRecipes` (3), `staffDiscount`, `vipCode`, `deliveryNote` |
 | TC-API-AUTH-4 | P2 | `GET /api/admin` | No token → 401 `Token required`. Non-base64-JSON → 401 `Invalid token format`. `{"role":"user"}` → 403. Login token → 200 `Welcome, admin!` |
-| TC-API-AUTH-5 | P1 | Forged admin token (D-1) | A token the client built itself should be rejected. `test.fail()` until fixed |
+| TC-API-AUTH-5 | P1 | Forged admin token (D-1) | A token the client built itself should be rejected (403) |
 
 ### 4.10 Security (UI)
 
@@ -208,27 +211,68 @@ The server keeps all state in memory and tests run in parallel, so:
 | TC-RWD-2 | P3 | Tablet 768 px | Menu grid wraps with no clipped text |
 | TC-A11Y-1 | P2 | Keyboard-only order journey | Tab to `+`, the name field and Place Order, and use Enter / Space to finish an order. Focus is visible |
 | TC-A11Y-2 | P2 | Labels | Name, Order ID, username and password inputs are reachable with `getByLabel`. Theme toggle has an accessible name |
-| TC-A11Y-3 | P3 | Automated scan | `@axe-core/playwright` on `/`, `/login.html`, `/protected.html`, with no serious or critical violations (needs a new dev dependency) |
+| TC-A11Y-3 | P3 | Automated scan | `@axe-core/playwright` on `/`, `/login.html`, `/protected.html`, with no serious or critical violations (D-9) |
 
 ---
 
-## 5. Suggested folder layout (when tests are written)
+## 5. File plan
 
 ```
-tests/
-  fixtures.ts               # page → '/', apiOrder fixture, loggedIn fixture
-  auth.setup.ts             # logs in, saves storageState ('setup' project)
-  ui/menu.spec.ts           # 4.1
-  ui/cart.spec.ts           # 4.2
-  ui/place-order.spec.ts    # 4.3
-  ui/order-management.spec.ts # 4.4, 4.5
-  ui/theme.spec.ts          # 4.6
-  ui/auth.spec.ts           # 4.7
-  ui/security.spec.ts       # 4.10
-  ui/responsive-a11y.spec.ts  # 4.11
-  api/menu-orders.spec.ts   # 4.8
-  api/auth.spec.ts          # 4.9
+awesome-pizza/
+├── playwright.config.ts          # baseURL, webServer, projects: setup / api / chromium / firefox / webkit / mobile
+├── specs/
+│   └── test-plan.md              # this plan (TC IDs referenced in test titles)
+└── tests/
+    ├── setup/
+    │   └── auth.setup.ts         # logs in as user/pass → playwright/.auth/user.json
+    │
+    ├── fixtures/
+    │   └── index.ts              # extends test: page objects, apiOrder, api client, loggedIn
+    │
+    ├── pages/                    # page objects: locators + actions only, no assertions
+    │   ├── HomePage.ts           # header, theme toggle, login link, notification
+    │   ├── MenuSection.ts        # menu cards, + / − by pizza name, quantity
+    │   ├── CartSection.ts        # cart lines, Remove, total, name field, Place Order
+    │   ├── OrderManagement.ts    # lookup, details, status badge, status buttons
+    │   ├── LoginPage.ts
+    │   └── ProtectedPage.ts
+    │
+    ├── api/
+    │   ├── client.ts             # typed wrapper: getMenu, getOrder, createOrder, updateOrder, login…
+    │   ├── menu.spec.ts          # TC-API-1
+    │   ├── orders.spec.ts        # TC-API-2…14
+    │   └── auth.spec.ts          # TC-API-AUTH-1…5
+    │
+    ├── ui/
+    │   ├── menu.spec.ts          # TC-MENU-*
+    │   ├── cart.spec.ts          # TC-CART-*
+    │   ├── place-order.spec.ts   # TC-ORD-*
+    │   ├── order-management.spec.ts  # TC-ORD-LU-*, TC-NOTE-*
+    │   ├── theme.spec.ts         # TC-THEME-*
+    │   ├── auth.spec.ts          # TC-AUTH-*
+    │   ├── security.spec.ts      # TC-SEC-*
+    │   └── responsive-a11y.spec.ts   # TC-RWD-*, TC-A11Y-*
+    │
+    ├── data/
+    │   ├── menu.ts               # the 5 expected pizzas
+    │   ├── seed-orders.ts        # order-001/002/003 (read-only)
+    │   ├── users.ts              # valid / invalid credentials
+    │   └── invalid-orders.ts     # data-driven POST/PUT validation cases (TC-API-5, 9)
+    │
+    └── utils/
+        ├── mocks.ts              # page.route helpers: fail menu, abort orders, 500 protected…
+        └── random.ts             # unique customer names so parallel tests don't collide
 ```
+
+**How the pieces fit together**
+- **`setup` project** logs in once and saves the session. UI login tests that need it load that saved session through `storageState`.
+- **`api` project** runs once without a browser. UI specs run in each browser. Only `responsive-a11y.spec.ts` runs on the mobile project.
+- **Page objects** hold the locators in one place. Tests keep their own `expect` checks, so failures point at a clear expectation.
+- **Fixtures** give tests ready-made helpers, e.g. `test('…', async ({ menu, cart, apiOrder }) => …)`. `apiOrder` creates a new order through the API for each test, which keeps parallel runs apart.
+- **`data/`** stores expected values once, so a menu change means editing one file.
+- **Test names start with the plan ID** (e.g. `TC-CART-6 Remove clears item`), so the HTML report links straight back to this plan. Known defects use `test.fail()` with the defect ID (D-1…D-7).
+
+**Build order:** config and `setup/`, then `api/client.ts` and the API specs, then `pages/` and `fixtures/`, then the UI specs, starting with the P1 cases.
 
 ## 6. Suggested implementation order
 

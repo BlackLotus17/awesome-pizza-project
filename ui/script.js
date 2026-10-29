@@ -5,6 +5,7 @@ const API_BASE = '/api';
 let dailyMenu = [];
 let cart = {};
 let currentOrderId = null;
+let isPlacingOrder = false; // Blocks a second order while the first request is in flight (e.g. double-click)
 
 // DOM Elements
 const menuContainer = document.getElementById('menu-container');
@@ -156,13 +157,15 @@ function removeFromCart(itemName) {
 function updateOrderButton() {
     const hasItems = Object.keys(cart).length > 0;
     const hasName = customerName.value.trim().length > 0;
-    placeOrderBtn.disabled = !(hasItems && hasName);
+    placeOrderBtn.disabled = isPlacingOrder || !(hasItems && hasName);
 }
 
 // Handle place order
 async function handlePlaceOrder() {
+    if (isPlacingOrder) return;
+
     const name = customerName.value.trim();
-    
+
     if (!name) {
         showNotification('Please enter your name', 'error');
         return;
@@ -183,7 +186,10 @@ async function handlePlaceOrder() {
         sender: name,
         contents: contents
     };
-    
+
+    isPlacingOrder = true;
+    updateOrderButton();
+
     try {
         const response = await fetch(`${API_BASE}/orders`, {
             method: 'POST',
@@ -215,6 +221,9 @@ async function handlePlaceOrder() {
     } catch (error) {
         console.error('Error placing order:', error);
         showNotification('Error placing order', 'error');
+    } finally {
+        isPlacingOrder = false;
+        updateOrderButton();
     }
 }
 
@@ -228,7 +237,7 @@ async function handleLookupOrder() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/orders/${orderId}`);
+        const response = await fetch(`${API_BASE}/orders/${encodeURIComponent(orderId)}`);
         const data = await response.json();
         
         if (data.success) {
@@ -245,24 +254,35 @@ async function handleLookupOrder() {
     }
 }
 
+// Escape user-supplied text before it goes into innerHTML
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Display order details
 function displayOrderDetails(order) {
-    const statusClass = `status-${order.status.toLowerCase()}`;
+    const statusClass = `status-${escapeHtml(order.status.toLowerCase())}`;
     
+    // Order fields come from users, so escape them; status buttons get listeners instead of inline onclick
     orderDetails.innerHTML = `
         <div class="order-info">
             <div class="order-info-item">
                 <div class="order-info-label">Order ID</div>
-                <div class="order-info-value">${order.id}</div>
+                <div class="order-info-value">${escapeHtml(order.id)}</div>
             </div>
             <div class="order-info-item">
                 <div class="order-info-label">Customer</div>
-                <div class="order-info-value">${order.sender}</div>
+                <div class="order-info-value">${escapeHtml(order.sender)}</div>
             </div>
             <div class="order-info-item">
                 <div class="order-info-label">Status</div>
                 <div class="order-info-value">
-                    <span class="status-badge ${statusClass}">${order.status}</span>
+                    <span class="status-badge ${statusClass}">${escapeHtml(order.status)}</span>
                 </div>
             </div>
         </div>
@@ -271,18 +291,18 @@ function displayOrderDetails(order) {
             <h4>Order Items</h4>
             ${order.contents.map(item => `
                 <div class="content-item">
-                    <span>${item.name}</span>
-                    <span><strong>×${item.quantity}</strong></span>
+                    <span>${escapeHtml(item.name)}</span>
+                    <span><strong>×${escapeHtml(item.quantity)}</strong></span>
                 </div>
             `).join('')}
         </div>
         
         ${order.status === 'RECEIVED' ? `
             <div style="margin-top: 1rem;">
-                <button class="btn-secondary" onclick="updateOrderStatus('${order.id}', 'DELIVERING')">
+                <button class="btn-secondary" data-status="DELIVERING">
                     Mark as Delivering
                 </button>
-                <button class="btn-secondary" onclick="updateOrderStatus('${order.id}', 'CANCELED')" 
+                <button class="btn-secondary" data-status="CANCELED" 
                         style="background: #dc3545; margin-left: 0.5rem;">
                     Cancel Order
                 </button>
@@ -291,7 +311,7 @@ function displayOrderDetails(order) {
         
         ${order.status === 'DELIVERING' ? `
             <div style="margin-top: 1rem;">
-                <button class="btn-secondary" onclick="updateOrderStatus('${order.id}', 'DELIVERED')" 
+                <button class="btn-secondary" data-status="DELIVERED" 
                         style="background: #28a745;">
                     Mark as Delivered
                 </button>
@@ -299,13 +319,17 @@ function displayOrderDetails(order) {
         ` : ''}
     `;
     
+    orderDetails.querySelectorAll('[data-status]').forEach(button => {
+        button.addEventListener('click', () => updateOrderStatus(order.id, button.dataset.status));
+    });
+    
     orderDetails.style.display = 'block';
 }
 
 // Update order status
 async function updateOrderStatus(orderId, newStatus) {
     try {
-        const response = await fetch(`${API_BASE}/orders/${orderId}`, {
+        const response = await fetch(`${API_BASE}/orders/${encodeURIComponent(orderId)}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'

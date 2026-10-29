@@ -2,6 +2,8 @@ const API_BASE = '/api';
 
 document.addEventListener('DOMContentLoaded', function () {
     initTheme();
+    // Before the token check so the toggle also works when logged out
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
 
     const token = localStorage.getItem('auth_token');
     if (!token) {
@@ -14,9 +16,9 @@ document.addEventListener('DOMContentLoaded', function () {
         localStorage.removeItem('auth_token');
         window.location.href = '/login.html';
     });
-    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
 
     document.getElementById('logout-btn').style.display = 'block';
+    document.getElementById('welcome-msg').style.display = 'block';
     document.getElementById('main-content').style.display = 'block';
     loadProtectedData(token);
 });

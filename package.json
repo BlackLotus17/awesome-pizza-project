@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "tsx api/server.ts"
+    "start": "tsx api/server.ts",
+    "test:bdd": "cucumber-js",
+    "test:bdd:smoke": "cucumber-js --profile smoke",
+    "test:bdd:api": "cucumber-js --profile api",
+    "test:bdd:ui": "cucumber-js --profile ui",
+    "test:bdd:defects": "cucumber-js --profile defects"
   },
   "repository": {
     "type": "git",
@@ -19,6 +24,8 @@
   },
   "homepage": "https://github.com/alexhddev/awesome-pizza#readme",
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@cucumber/cucumber": "^13.3.0",
     "@playwright/test": "^1.64.1",
     "@types/node": "^26.1.1",
     "tsx": "^4.23.1",
