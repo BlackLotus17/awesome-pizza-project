@@ -15,3 +15,6 @@ node_modules
 
 # Playwright MCP snapshots and screenshots
 /.playwright-mcp/
+
+# playwright-cli snapshots, screenshots, traces and videos
+/.playwright-cli/

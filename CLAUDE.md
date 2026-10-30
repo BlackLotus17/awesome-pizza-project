@@ -76,3 +76,5 @@ The full list is in the "TypeScript Coding Standards" section of `README.md`. Ke
 ## Playwright agents and skill
 
 `.claude/agents/` has the Playwright test planner / generator / healer agents and `.claude/skills/playwright-cli/` the playwright-cli skill (mirrored in `.github/` for Copilot). Note the generator/healer agents target Playwright Test `.spec.ts` files, whereas this suite is Cucumber — output from them needs adapting to features/steps/page objects.
+
+`.claude/skills/bdd-qa/` (also mirrored in `.github/`) is the QA standard for this repo: the plan → explore → automate → run → record loop, how to turn playwright-cli output into Cucumber steps and page objects, API and non-functional checks, defect handling and the definition of done. The playwright-cli skill is a copy of the one bundled with Playwright (`node_modules/playwright-core/lib/tools/skills/playwright-cli/`); when Playwright is upgraded, re-copy it, keep the local `allowed-tools` line (it also allows `npx` and `npm`) and CRLF line endings.
