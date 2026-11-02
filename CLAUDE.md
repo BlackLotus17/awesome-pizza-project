@@ -34,7 +34,7 @@ Environment variables read by the suite:
 - `BROWSER=chromium|firefox|webkit` (default chromium) — one browser per run.
 - `HEADED=1` — show the browser.
 - `BASE_URL`, `SERVER_COMMAND` — override target app / how it's started.
-- `UPDATE_SNAPSHOTS=1` — rewrite visual baselines in `tests/__screenshots__/<browser>/<platform>/`.
+- `UPDATE_SNAPSHOTS=1` — rewrite visual baselines in `tests/__screenshots__/<browser>/<platform>/`. A missing baseline is written on a local run but fails when `CI` is set; generate Linux baselines by running the workflow manually with `update_snapshots`, then commit the uploaded artifact.
 
 VS Code's Testing panel runs scenarios through the Cucumber Test Runner extension (`balrog994.cucumber-test-runner`) using the `ide` profile. That profile must not set `paths` (cucumber-js merges them with the file the extension passes, so the whole suite would run) or any stdout formatter (the extension parses `--format message` from stdout).
 

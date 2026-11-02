@@ -2,6 +2,11 @@ name: "Copilot Setup Steps"
 
 on:
   workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: Regenerate visual baselines on this runner and upload them as an artifact
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -31,6 +36,18 @@ jobs:
     # `cucumber-js` runs the BDD suite, whose BeforeAll spawns its own server.
     - name: Run BDD test suite
       run: npm run test:bdd
+      env:
+        UPDATE_SNAPSHOTS: ${{ inputs.update_snapshots && '1' || '' }}
+
+    # Baselines are compared byte for byte, so they must come from this runner.
+    # Download the artifact and commit it to tests/__screenshots__/chromium/linux/.
+    - name: Upload regenerated visual baselines
+      if: ${{ inputs.update_snapshots }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: visual-baselines-linux
+        path: tests/__screenshots__/chromium/linux/
+        retention-days: 7
 
     - name: Upload Cucumber report
       if: always()
