@@ -3,11 +3,9 @@ name: "Copilot Setup Steps"
 on:
   workflow_dispatch:
   push:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
+    branches:
+      - main
   pull_request:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
 
 jobs:
   copilot-setup-steps:
@@ -27,8 +25,19 @@ jobs:
       run: npm ci
 
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: npx playwright install --with-deps chromium
 
-    # Customize this step as needed
-    - name: Build application
-      run: npx run build
+    # This project has no `build` step: `tsx api/server.ts` runs the app and
+    # `cucumber-js` runs the BDD suite, whose BeforeAll spawns its own server.
+    - name: Run BDD test suite
+      run: npm run test:bdd
+
+    - name: Upload Cucumber report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: cucumber-report
+        path: |
+          reports/cucumber-report.html
+          reports/cucumber-report.json
+        retention-days: 7
