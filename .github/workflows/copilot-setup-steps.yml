@@ -7,10 +7,8 @@ on:
         description: Regenerate visual baselines on this runner and upload them as an artifact
         type: boolean
         default: false
+  # Every branch push runs the suite. No pull_request trigger: it would run twice for each PR push.
   push:
-    branches:
-      - main
-  pull_request:
 
 jobs:
   copilot-setup-steps:
