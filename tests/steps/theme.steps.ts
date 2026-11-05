@@ -34,14 +34,20 @@ Given(/^the page is switched to (dark|light) mode$/, async function (this: Pizza
 });
 
 // Cucumber has no toHaveScreenshot, so compare against a stored baseline.
-// The first run (or UPDATE_SNAPSHOTS=1) writes the baseline.
+// The first local run (or UPDATE_SNAPSHOTS=1) writes the baseline. CI checkouts are fresh,
+// so writing one there would pass without comparing anything: a missing baseline fails instead.
 Then('the home page matches the screenshot {string}', async function (this: PizzaWorld, name: string) {
     await expect.poll(() => this.home.menu.allImagesSettled()).toBe(true);
     const actual = await this.page.screenshot({ fullPage: true, animations: 'disabled', mask: [this.home.menu.images] });
 
     const dir = path.resolve(__dirname, '../__screenshots__', browserName, process.platform);
     const baselinePath = path.join(dir, name);
-    if (process.env.UPDATE_SNAPSHOTS || !fs.existsSync(baselinePath)) {
+    const baselineExists = fs.existsSync(baselinePath);
+    if (process.env.CI && !process.env.UPDATE_SNAPSHOTS && !baselineExists) {
+        this.attach(actual, 'image/png');
+        throw new Error(`No baseline at ${baselinePath}. Generate it with UPDATE_SNAPSHOTS=1 on this platform and commit it.`);
+    }
+    if (process.env.UPDATE_SNAPSHOTS || !baselineExists) {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(baselinePath, actual);
         this.log(`Baseline written: ${baselinePath}`);

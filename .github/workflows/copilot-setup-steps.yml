@@ -2,12 +2,13 @@ name: "Copilot Setup Steps"
 
 on:
   workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: Regenerate visual baselines on this runner and upload them as an artifact
+        type: boolean
+        default: false
+  # Every branch push runs the suite. No pull_request trigger: it would run twice for each PR push.
   push:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
-  pull_request:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
 
 jobs:
   copilot-setup-steps:
@@ -27,8 +28,31 @@ jobs:
       run: npm ci
 
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: npx playwright install --with-deps chromium
 
-    # Customize this step as needed
-    - name: Build application
-      run: npx run build
+    # This project has no `build` step: `tsx api/server.ts` runs the app and
+    # `cucumber-js` runs the BDD suite, whose BeforeAll spawns its own server.
+    - name: Run BDD test suite
+      run: npm run test:bdd
+      env:
+        UPDATE_SNAPSHOTS: ${{ inputs.update_snapshots && '1' || '' }}
+
+    # Baselines are compared byte for byte, so they must come from this runner.
+    # Download the artifact and commit it to tests/__screenshots__/chromium/linux/.
+    - name: Upload regenerated visual baselines
+      if: ${{ inputs.update_snapshots }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: visual-baselines-linux
+        path: tests/__screenshots__/chromium/linux/
+        retention-days: 7
+
+    - name: Upload Cucumber report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: cucumber-report
+        path: |
+          reports/cucumber-report.html
+          reports/cucumber-report.json
+        retention-days: 7
