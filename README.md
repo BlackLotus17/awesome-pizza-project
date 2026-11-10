@@ -252,6 +252,86 @@ curl -X PUT http://localhost:3000/api/orders/order-001 \
   -H "Content-Type: application/json" \
   -d '{"status": "DELIVERING"}'
 ```
+
+## Test Framework Architecture
+
+The repository holds the app under test and a BDD suite that tests it through both the browser and the REST API. Scenarios are written in Gherkin and run by [Cucumber.js](https://github.com/cucumber/cucumber-js). [Playwright](https://playwright.dev/) drives the browser, sends API requests and mocks network responses, and [axe-core](https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright) runs the accessibility checks. Everything is TypeScript, loaded by `tsx`, so there is no build step.
+
+### Layers
+
+```mermaid
+flowchart TD
+    CFG["cucumber.js<br/>profiles and tag filters"] --> FEAT["Feature files<br/>tests/features/ui, tests/features/api"]
+    HOOKS["Hooks: app, browser and contexts<br/>tests/support/hooks.ts"] -->|sets up per scenario| WORLD["PizzaWorld: per-scenario state<br/>tests/support/world.ts"]
+    FEAT --> STEPS["Step definitions<br/>tests/steps/*.steps.ts"]
+    WORLD <--> STEPS
+    DATA["Test data and API routes<br/>tests/data/"] --> STEPS
+    STEPS --> PAGES["Page objects<br/>tests/pages/"]
+    STEPS --> CLIENT["ApiClient<br/>tests/support/api-client.ts"]
+    STEPS --> MOCKS["Network mocks<br/>tests/support/mocks.ts"]
+    PAGES --> PW["Playwright<br/>browser, APIRequestContext, page.route"]
+    CLIENT --> PW
+    MOCKS --> PW
+    PW --> APP["Awesome Pizza app<br/>api/server.ts and ui/, port 3000"]
+```
+
+Each layer only talks to the one below it. The hooks sit alongside the layers: they start the app if it isn't already running, launch the browser, and give each scenario's World a fresh API and browser context. Feature files describe behaviour in plain language, step definitions translate each line into calls on page objects or `ApiClient` and make the assertions, and only page objects know how to find elements on a page.
+
+| Layer | Location | Responsibility |
+|---|---|---|
+| Configuration | `cucumber.js` | Profiles (`default`, `smoke`, `api`, `ui`, `defects`, `all`, `ide`), tag filters, report formats, and loading TypeScript through `tsx/cjs` |
+| Features | `tests/features/ui/`, `tests/features/api/` | Gherkin scenarios, one feature per area, named after the test case IDs in `specs/test-plan.md` |
+| Step definitions | `tests/steps/` | One `<area>.steps.ts` file per area; `common.steps.ts` holds the generic ones. Steps stay thin and hold the assertions |
+| World | `tests/support/world.ts` | `PizzaWorld`, created fresh for every scenario. Holds the page objects, API client, last response, created order and what the browser observed (console errors, failed requests, API calls). `interpolate()` expands `{orderId}`, `{loginToken}` and `{base64:…}` in feature text |
+| Hooks | `tests/support/hooks.ts` | Starts the app and browser once per run, gives every scenario its own API and browser context, attaches a screenshot on failure, and handles the `@chromium-only` and `@skip-webkit` tags |
+| Page objects | `tests/pages/` | `BasePage` holds the header, theme toggle and generic controls. `HomePage` composes `MenuSection`, `CartSection`, `OrderManagement` and `Notification`; `LoginPage` and `ProtectedPage` cover the other pages. Page objects never assert |
+| API client | `tests/support/api-client.ts` | Typed wrapper over the REST API, used both by API scenarios and to set up data for UI scenarios |
+| Mocks | `tests/support/mocks.ts` | `page.route` helpers that fake server errors, network failures and slow responses, so error paths can be tested without breaking the real server |
+| Test data | `tests/data/test-data.ts`, `tests/data/api-routes.ts` | Every expected value, credential, message and API path, plus helpers such as `uniqueName()` and `resolveText()` |
+
+### How a scenario runs
+
+1. **Start-up:** `cucumber-js` reads the chosen profile in `cucumber.js`, which picks the feature files and tag filter. It then loads `tests/support/` and `tests/steps/`.
+2. **Before all scenarios:** the hooks check whether the app answers at `BASE_URL`. If not, they start it with `SERVER_COMMAND` (by default `npx tsx api/server.ts`) and wait up to 30 seconds. They then launch the browser named by `BROWSER`, headless unless `HEADED` is set.
+3. **Before each scenario:** Cucumber creates a new `PizzaWorld`. Scenarios tagged `@chromium-only` or `@skip-webkit` are skipped on the browsers they don't support. Every scenario gets its own Playwright `APIRequestContext` and `ApiClient`. Scenarios not tagged `@api` also get a new browser context and page, and the World starts recording console errors, failed requests and calls to `/api`.
+4. **Steps:** each step reads and updates state on the World, acts through page objects or `ApiClient`, and asserts with Playwright's `expect`. Each step has a 30-second timeout.
+5. **After each scenario:** if it failed, a full-page screenshot is attached to the report. The browser context and API context are then closed, so nothing leaks into the next scenario.
+6. **After all scenarios:** the browser closes, and if the hooks started the app, they stop it.
+
+### Tags
+
+| Tag | Effect |
+|---|---|
+| `@ui`, `@api` | Area. `@api` scenarios run without a browser; the `ui` and `api` profiles select by these |
+| `@P1`, `@P2`, `@P3` | Priority. The `smoke` profile runs `@P1` only |
+| `@TC-…` | Test case ID from `specs/test-plan.md`, so a single case can be run with `--tags` |
+| `@known-defect`, `@to-confirm` | The scenario asserts the correct behaviour for a known defect (D-1…D-7) or behaviour still to be confirmed. It fails until the app is fixed, so the default run excludes it and `npm run test:bdd:defects` runs it |
+| `@visual` | Screenshot comparison against a stored baseline |
+| `@chromium-only`, `@skip-webkit` | Skipped on browsers that can't run the scenario reliably |
+
+### Design decisions
+
+- **Isolation:** every scenario has its own browser context and API context. The app's in-memory data is shared by the whole run, so scenarios create their own orders with `uniqueName()`, treat the seeded orders (`order-001`…`order-003`) as read-only, and never assert on how many orders exist. Scenarios run one at a time by default, but this keeps them safe to run in parallel.
+- **One browser per run:** `BROWSER` chooses Chromium, Firefox or WebKit for the whole run. CI runs Chromium only.
+- **Defects stay visible:** known defects are recorded as failing scenarios rather than deleted or weakened, so fixing a defect is confirmed by its scenario starting to pass.
+- **Error paths are mocked:** failures such as a 500 from `/api/daily-menu` or a dropped connection are produced with `page.route`, so the real server never has to be broken.
+- **Visual baselines per platform:** screenshots are compared byte for byte against `tests/__screenshots__/<browser>/<platform>/`, because fonts and rendering differ between operating systems. A missing baseline is written on a local run but fails in CI, so CI can never pass without comparing.
+- **No literals in steps:** values live in `tests/data/`, so a change to the app's text or routes is made in one place.
+
+### Reports and CI
+
+Each run writes `reports/cucumber-report.html` and `reports/cucumber-report.json`. Failed UI scenarios include a screenshot.
+
+The GitHub Actions workflow in `.github/workflows/copilot-setup-steps.yml` runs on every push and can also be started manually. It installs the dependencies and Chromium, runs `npm run test:bdd`, and uploads the reports as the `cucumber-report` artifact, kept for 7 days. A manual run with `update_snapshots` ticked regenerates the Linux visual baselines and uploads them as the `visual-baselines-linux` artifact, to be committed to `tests/__screenshots__/chromium/linux/`.
+
+### Related tooling outside the suite
+
+- `bruno/` is a Bruno collection for manual and command-line API checks, and `requests.http` is the older VS Code REST Client version.
+- `ui/swagger.json` is the OpenAPI spec behind the Swagger UI at `/api-docs.html`.
+- `specs/test-plan.md` is the test plan: features, test case IDs and known defects.
+- `playwright.config.ts` and `tests/seed.spec.ts` are Playwright Test scaffolding for the Playwright agents in `.claude/agents/`. The Cucumber suite doesn't use them.
+- `.claude/skills/bdd-qa/` is the QA standard for working on this suite, mirrored in `.github/skills/` for Copilot.
+
 ## TypeScript Coding Standards
 
 These describe how the existing `.ts` files are written. No linter or formatter is set up, so follow them by hand and match the file you are editing.
